@@ -94,5 +94,5 @@ def relationship_handler(request, user, status_slug, add=True,
         template_name = success_template_name
 
     return render(request,
-        template_name,
-        {'to_user': user, 'status': status, 'add': add})
+                  template_name,
+                  {'to_user': user, 'status': status, 'add': add})

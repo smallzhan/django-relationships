@@ -2,7 +2,8 @@ import django
 from django.conf import settings
 from django.contrib.sites.models import Site
 from django.db import models, connection
-from django.db.models.fields.related import create_many_related_manager, ManyToManyRel
+from django.db.models.fields.related import create_many_related_manager
+from django.db.models.fields.related import ManyToManyRel
 from django.utils.translation import ugettext_lazy as _
 
 from .compat import User
@@ -27,15 +28,25 @@ class RelationshipStatusManager(models.Manager):
 class RelationshipStatus(models.Model):
     name = models.CharField(_('name'), max_length=100)
     verb = models.CharField(_('verb'), max_length=100)
-    from_slug = models.CharField(_('from slug'), max_length=100,
+    from_slug = models.CharField(
+        _('from slug'),
+        max_length=100,
         help_text=_("Denote the relationship from the user, i.e. 'following'"))
-    to_slug = models.CharField(_('to slug'), max_length=100,
+    to_slug = models.CharField(
+        _('to slug'),
+        max_length=100,
         help_text=_("Denote the relationship to the user, i.e. 'followers'"))
-    symmetrical_slug = models.CharField(_('symmetrical slug'), max_length=100,
+    symmetrical_slug = models.CharField(
+        _('symmetrical slug'),
+        max_length=100,
         help_text=_("When a mutual relationship exists, i.e. 'friends'"))
-    login_required = models.BooleanField(_('login required'), default=False,
+    login_required = models.BooleanField(
+        _('login required'),
+        default=False,
         help_text=_("Users must be logged in to see these relationships"))
-    private = models.BooleanField(_('private'), default=False,
+    private = models.BooleanField(
+        _('private'),
+        default=False,
         help_text=_("Only the user who owns these relationships can see them"))
 
     objects = RelationshipStatusManager()
@@ -50,15 +61,30 @@ class RelationshipStatus(models.Model):
 
 
 class Relationship(models.Model):
-    from_user = models.ForeignKey(User,
-        related_name='from_users', verbose_name=_('from user'))
-    to_user = models.ForeignKey(User,
-        related_name='to_users', verbose_name=_('to user'))
-    status = models.ForeignKey(RelationshipStatus, verbose_name=_('status'))
-    created = models.DateTimeField(_('created'), auto_now_add=True)
-    weight = models.FloatField(_('weight'), default=1.0, blank=True, null=True)
-    site = models.ForeignKey(Site, default=settings.SITE_ID,
-        verbose_name=_('site'), related_name='relationships')
+    from_user = models.ForeignKey(
+        User,
+        related_name='from_users',
+        verbose_name=_('from user'))
+    to_user = models.ForeignKey(
+        User,
+        related_name='to_users',
+        verbose_name=_('to user'))
+    status = models.ForeignKey(
+        RelationshipStatus,
+        verbose_name=_('status'))
+    created = models.DateTimeField(
+        _('created'),
+        auto_now_add=True)
+    weight = models.FloatField(
+        _('weight'),
+        default=1.0,
+        blank=True,
+        null=True)
+    site = models.ForeignKey(
+        Site,
+        default=settings.SITE_ID,
+        verbose_name=_('site'),
+        related_name='relationships')
 
     class Meta:
         unique_together = (('from_user', 'to_user', 'status', 'site'),)
@@ -97,15 +123,41 @@ class RelationshipManager(User._default_manager.__class__):
         if not status:
             status = RelationshipStatus.objects.following()
 
-        relationship, created = Relationship.objects.get_or_create(
-            from_user=self.instance,
-            to_user=user,
-            status=status,
-            site=Site.objects.get_current()
-        )
+        if status == RelationshipStatus.objects.blocking():
+            following = Relationship.objects.filter(
+                from_user=user,
+                to_user=self.instance,
+                status=RelationshipStatus.objects.following(),
+                site=Site.objects.get_current())
+            if following.exists():
+                following.delete()
 
+            relationship, created = Relationship.objects.get_or_create(
+                from_user=self.instance,
+                to_user=user,
+                status=status,
+                site=Site.objects.get_current()
+            )
+        elif status == RelationshipStatus.objects.following():
+            blocking = Relationship.objects.filter(
+                from_user=user,
+                to_user=self.instance,
+                status=RelationshipStatus.objects.blocking(),
+                site__pk=settings.SITE_ID)
+            if blocking.exists():
+                return None
+            else:
+                relationship, created = Relationship.objects.get_or_create(
+                    from_user=self.instance,
+                    to_user=user,
+                    status=status,
+                    site=Site.objects.get_current()
+                )
+        else:
+            return None
         if symmetrical:
-            return (relationship, user.relationships.add(self.instance, status, False))
+            return (relationship, user.relationships.add(
+                self.instance, status, False))
         else:
             return relationship
 
@@ -125,7 +177,9 @@ class RelationshipManager(User._default_manager.__class__):
         ).delete()
 
         if symmetrical:
-            return (res, user.relationships.remove(self.instance, status, False))
+            return (res, user.relationships.remove(self.instance,
+                                                   status,
+                                                   False))
         else:
             return res
 
